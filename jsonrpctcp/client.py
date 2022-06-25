@@ -7,17 +7,17 @@ conn = connect('localhost', 8001)
 result = conn.method(param1, param2)
 result = conn.tree.method(keyword=arg)
 """
-from __future__ import print_function 
+from __future__ import print_function
 
 import sys
-import socket 
+import socket
 import uuid
 import hashlib
 from jsonrpctcp import config
 from jsonrpctcp import history
 from jsonrpctcp import logger
 from jsonrpctcp.errors import ProtocolError, EncryptionMissing
-    
+
 try:
     import json
 except ImportError:
@@ -40,7 +40,7 @@ class Client(object):
         self._key = kwargs.get('key', None)
         if self._key and not config.crypt:
             raise EncryptionMissing('No encryption library found.')
-        
+
     def __getattr__(self, key):
         if key.startswith('_'):
             raise AttributeError('Methods that start with _ are not allowed.')
@@ -48,7 +48,7 @@ class Client(object):
         request = ClientRequest(self, namespace=key, req_id=req_id)
         self._requests.append(request)
         return request
-        
+
     @property
     def _notification(self):
         """
@@ -62,7 +62,7 @@ class Client(object):
         )
         self._requests.append(request)
         return request
-        
+
     def _batch(self):
         """
         Returns a specialized version of the Client class, prepped for
@@ -70,11 +70,11 @@ class Client(object):
         __call__()ed.
         """
         return Client(self._addr, batch=True)
-        
+
     def _is_batch(self):
         """ Checks whether the batch flag is set. """
         return self.__batch is True
-        
+
     def __call__(self):
         assert len(self._requests) > 0
         requests = []
@@ -87,7 +87,7 @@ class Client(object):
             result = self._call_batch(requests)
         self._requests = []
         return result
-            
+
     def _call_single(self, request):
         """
         Processes a single request, and returns the response.
@@ -101,10 +101,10 @@ class Client(object):
         response = self._parse_response(response_text)
         if not response:
             return response
-        self._response = response        
+        self._response = response
         validate_response(response)
         return response['result']
-        
+
     def _call_batch(self, requests):
         """
         Processes a batch, and returns a generator to iterate over the
@@ -112,7 +112,7 @@ class Client(object):
         """
         ids = []
         for request in requests:
-            if request.has_key('id'):
+            if "id" in request:
                 ids.append(request['id'])
         self._request = requests
         message = json.dumps(requests)
@@ -127,7 +127,7 @@ class Client(object):
             responses = []
         assert type(responses) is list
         return BatchResponses(responses, ids)
-    
+
     def _send_and_receive(self, message, batch=False, notify=False):
         """
         Handles the socket connection, sends the JSON request, and
@@ -149,7 +149,7 @@ class Client(object):
             sock.send(message)
         else:
             sock.send(message.encode('utf-8'))
-        
+
         responselist = []
         if notify:
             # single notification, we don't need a response.
@@ -160,8 +160,9 @@ class Client(object):
                     data = sock.recv(config.buffer)
                 except socket.timeout:
                     break
-                if not data: 
+                if not data:
                     break
+                data = data.decode()
                 responselist.append(data)
                 if len(data) < config.buffer:
                     break
@@ -182,7 +183,7 @@ class Client(object):
         logger.debug('CLIENT | RESPONSE: %s' % response)
         history.response = response
         return response
-        
+
     def _parse_response(self, response):
         if response == '':
             return None
@@ -197,41 +198,41 @@ class Client(object):
                 obj.get('error').get('data', None)
             )
         return obj
-        
+
 class BatchResponses(object):
-    """ 
-    This is just a wrapper around the responses so you can 
+    """
+    This is just a wrapper around the responses so you can
     iterate or retrieve by single id.
     """
-    
+
     def __init__(self, responses, ids):
         self.responses = responses
-        self.ids = ids        
+        self.ids = ids
         response_by_id = {}
         for response in responses:
             response_id = response.get('id', None)
             response_by_id.setdefault(response_id, [])
             response_by_id[response_id].append(response)
         self._response_by_id = response_by_id
-        
+
     def __iter__(self):
         for request_id in self.ids:
             yield self.get(request_id)
-            
+
     def get(self, req_id):
         responses = self._response_by_id.get(req_id, None)
         if not responses:
             responses = self._response_by_id.get(None)
         if not responses or len(responses) == 0:
             raise KeyError(
-                'Job "%s" does not exist or has already be retrieved.' 
+                'Job "%s" does not exist or has already be retrieved.'
                 % req_id
             )
         response = responses.pop(0)
         validate_response(response)
         return response['result']
-        
-           
+
+
 class ClientRequest(object):
     """
     This is the class that holds all of the namespaced methods,
@@ -254,7 +255,7 @@ class ClientRequest(object):
             self._namespace += '.'
         self._namespace += key
         return self
-    
+
     def __call__(self,  *args, **kwargs):
         if not (len(args) == 0 or len(kwargs) == 0):
             raise ValueError(
@@ -265,7 +266,7 @@ class ClientRequest(object):
         if len(kwargs) > 0:
             params = kwargs
         return self._call_server(params)
-        
+
     def _call_server(self, params):
         """
         Forms a valid jsonrpc query, and passes it on to the parent
@@ -275,10 +276,10 @@ class ClientRequest(object):
         if not self._client._is_batch():
             return self._client()
         # Add batch logic here
-        
+
     def _request(self):
         request = {
-            'jsonrpc':'2.0', 
+            'jsonrpc':'2.0',
             'method': self._namespace
         }
         if self._params:
@@ -286,14 +287,14 @@ class ClientRequest(object):
         if not self._notification:
             request['id'] = self._req_id
         return request
-        
+
 def connect(host, port, key=None):
     """
     This is a wrapper function for the Client class.
     """
     client = Client((host, port), key=key)
     return client
-    
+
 def validate_response(response):
     """
     Parses the returned JSON object, verifies that it follows
@@ -308,10 +309,10 @@ def validate_response(response):
         raise Exception('Server returned invalid response.')
     if error:
         raise ProtocolError(
-            response['error']['code'], 
+            response['error']['code'],
             response['error']['message']
         )
-        
+
 def test_client():
     """
     This is the test client to be run against the test_server in
@@ -322,11 +323,11 @@ def test_client():
     result = conn.echo(value)
     assert result == value
     print('Single test completed.')
-    
+
     result = conn._notification.echo(message='No response!')
     assert result == None
     print('Notify test completed.')
-    
+
     batch = conn._batch()
     batch.tree.echo(message="First!")
     batch._notification.echo("Skip!")
@@ -336,11 +337,11 @@ def test_client():
         results.append(i)
     assert results == ['First!', 'Last!']
     print('Batch test completed.')
-    
+
     result = conn.echo(message=5)
     assert result == 5
     print('Post-batch test completed.')
-    
+
     try:
         conn.echo()
     except Exception as e:
@@ -348,7 +349,7 @@ def test_client():
         print(e.code, e.message)
     else:
         print('ERROR: Did not throw exception for bad call.')
-        
+
     try:
         conn.foobar(5, 6)
     except Exception as e:
@@ -356,12 +357,12 @@ def test_client():
         print(e.code, e.message)
     else:
         print('ERROR: Did not throw exception for bad method.')
-    
+
     print('=============================')
     print("Tests completed successfully.")
-    
+
 if __name__ == "__main__":
-    import sys    
+    import sys
     import logging
     if '-v' in sys.argv:
         config.verbose = True

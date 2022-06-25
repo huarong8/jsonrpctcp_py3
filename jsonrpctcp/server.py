@@ -3,6 +3,8 @@ This module holds all of the functions and classes necessary for
 initiating a JSONRPC-TCP Server.
 """
 from __future__ import print_function
+
+import logging
 import threading
 import socket
 import time
@@ -91,7 +93,7 @@ class Server(object):
         threads.
         """
         for thread in self.threads:
-            if not thread.isAlive():
+            if not thread.is_alive():
                 thread.join()
                 self.threads.remove(thread)
     
@@ -114,11 +116,11 @@ class JSONRequest(object):
         Attach a handler to the request object. It must be either
         callable, or a subclass of Handler.
         """
-        if isclass(method):
-            assert issubclass(method, Handler)
+        if isinstance(method, Handler):
+            # assert issubclass(method, Handler)
             # If it's an actual Handler subclass
-            handler_instance = method(self)
-            for hname, method in handler_instance._handlers.iteritems():
+            handler_instance = method
+            for hname, method in handler_instance._handlers.items():
                 if name:
                     hname = '%s.%s' % (name, hname)
                 self.handlers[hname] = method
@@ -130,7 +132,7 @@ class JSONRequest(object):
             
     def get_handler(self, name):
         """ Check for an attached handler and return it. """
-        if self.handlers.has_key(name):
+        if name in self.handlers:
             return self.handlers[name]
         return None
                 
@@ -164,6 +166,7 @@ class ProcessRequest(object):
             data = self.get_data()
             if not data: 
                 break
+            data = data.decode()
             requestlines.append(data)
             if len(data) < config.buffer: 
                 break
@@ -191,7 +194,7 @@ class ProcessRequest(object):
                 length = config.crypt_chunk_size
                 pad_length = length - (len(response) % length)
                 response = crypt.encrypt('%s%s' % (response, ' '*pad_length))
-            self.socket.send(response)
+            self.socket.send(response.encode())
         self.socket.close()
 
     def get_data(self):
@@ -209,10 +212,12 @@ class ProcessRequest(object):
         
     def parse_request(self, data):
         """ Attempts to load the request, validates it, and calls it. """
+        obj = None
         try:
             obj = json.loads(data)
-        except ValueError:
+        except ValueError as e:
             return json.dumps(ProtocolError(-32700).generate_error())
+
         if not obj:
             return json.dumps(ProtocolError(-32600).generate_error())
         batch = True
@@ -224,12 +229,11 @@ class ProcessRequest(object):
             request_error = ProtocolError(-32600)
             if type(req) is not dict:
                 responses.append(request_error.generate_error())
-            elif 'method' not in req.keys() or \
-                type(req['method']) not in types.StringTypes:
+            elif 'method' not in req.keys():
                 responses.append(request_error.generate_error())
             else:
                 result = self.parse_call(req)
-                if req.has_key('id'):
+                if "id" in req:
                     response = generate_response(result, id=req.get('id'))
                     responses.append(response)
         if not responses:
@@ -246,7 +250,7 @@ class ProcessRequest(object):
         """
         Parses a JSON request.
         """
-            
+
         # Get ID, Notification if None
         # This is actually incorrect, as IDs can be null by spec (rare)
         request_id = obj.get('id', None)
@@ -254,8 +258,8 @@ class ProcessRequest(object):
         # Check for required parameters
         jsonrpc = obj.get('jsonrpc', None)
         method = obj.get('method', None)
-        if not jsonrpc or not method:
-            return ProtocolError(-32600)
+        #if not jsonrpc or not method:
+        #    return ProtocolError(-32600)
         
         # Validate parameters
         params = obj.get('params', [])

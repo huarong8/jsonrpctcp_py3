@@ -10,8 +10,9 @@ class Handler(object):
     or Server instance.
     """
     
-    def __init__(self, request):
-        self.request = request
+    # def __init__(self, request):
+    def __init__(self):
+        # self.request = request
         self.__handlers = None
         
     client_address = None
@@ -31,7 +32,7 @@ class Handler(object):
                 attr = getattr(self, key)
                 # Tree syntax
                 if issubclass(type(attr), Handler) and attr != self:
-                    for name, handler in attr._handlers.iteritems():
+                    for name, handler in attr._handlers.items():
                         name = '%s.%s' % (key, name)
                         handlers[name] = handler
                 # Normal syntax
