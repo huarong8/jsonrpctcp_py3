@@ -21,7 +21,7 @@ class HelloService(Handler):
 
 2. server example
 
-```
+```python
 from typing import List
 
 from jsonrpctcp.server import Server
@@ -63,7 +63,7 @@ server.listen_and_accept()
 ```
 
 3. cilent example
-```
+```python
 import json
 import logging
 import socket
